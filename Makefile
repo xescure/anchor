@@ -124,16 +124,17 @@ do-lint: node_modules $(GENERATED_FILES)
 	npm run eslint -- --config .eslint.config.mjs ${KEETA_ANCHOR_LINT_ARGS}
 	npm run cspell -- --config .cspell.config.mjs --no-progress 'src/**/*.ts'
 
-PUBLIC_DEV_FILES = .npmrc package.json package-lock.json src/lib/utils/tests/node.ts
+PUBLIC_DEV_FILES = .npmrc package.json package-lock.json
 
 public-dev:
 	@git diff --quiet -- $(PUBLIC_DEV_FILES) || (echo 'Error: uncommitted changes to $(PUBLIC_DEV_FILES)' >&2; exit 1)
 	git update-index --skip-worktree $(PUBLIC_DEV_FILES)
 	rm -f .npmrc
-	npm pkg delete 'devDependencies.@keetanetwork/keetanet-node'
-	jq --tab '(.packages[] | select(.resolved // "" | startswith("https://npm.pkg.github.com/"))) |= del(.resolved)' < package-lock.json > package-lock.json.new
+	version='$(NODE_LITE_VERSION)'; \
+		[ -n "$${version}" ] || version="$$(git show HEAD:package.json | jq -r '.devDependencies["@keetanetwork/keetanet-node"]')"; \
+		npm pkg set "devDependencies.@keetanetwork/keetanet-node=npm:@xescure/node-lite@$${version}"
+	jq --tab '(.packages[] | select(.resolved // "" | startswith("https://npm.pkg.github.com/"))) |= del(.resolved) | .packages |= with_entries(select(.key | test("^node_modules/@keetanetwork/keetanet-node(/|$$)") | not))' < package-lock.json > package-lock.json.new
 	mv package-lock.json.new package-lock.json
-	cp src/lib/utils/tests/node.public-stub.ts src/lib/utils/tests/node.ts
 	rm -rf node_modules
 	npm install
 	@touch node_modules/.done
